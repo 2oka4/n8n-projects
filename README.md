@@ -13,4 +13,4 @@ Web scrapping is done by first finding the number of the latest article on the m
 After the web scrapping, a human is able to give the instructions to an AI Agent powered by the Google Gemini model to make changes in the summarized text (for example, delete some of the sentences or make it shorter). AI agent saves changes in the Google Sheets.
 
 ## 3. Posting content
-After the message of approval from the human, the system posts the coorected text to the Telegram Channel.
+After the message of approval from the human, the system posts the corrected text to the Telegram Channel.
