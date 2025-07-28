@@ -1,0 +1,632 @@
+{
+  "name": "My workflow 4",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -192,
+        80
+      ],
+      "id": "35bfe466-fa28-4948-ac92-df6917ea3e1f",
+      "name": "Telegram Trigger",
+      "webhookId": "f7f5d9ac-dd86-414b-b1b8-bba4a6400814"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=The conversation history:\n{{ $json.conversation }}\n\nContinue to chat with user based on this conversation.\n\nYour goal is to ask user questions and obtain required information. If the conversation has just started, than you should output the text of greeting the user and providing him information about our customer service policy: we only work with customers who have annual income over 100000 and who lives in Ukraine and ask her name. After that you need to gather information about:name, phone number, annual income and the country of residence of user. Be sure to ask one question at the time. If the result is no as expected (user doesn't live in Ukraine or his/her annual income is lower than 100000), apologize and say that we expect our customer to base in Ukraine and so on and do not ask the following uqestions. If the user changed his mind at some point (for example, user was innitialy lived in Britian, but now lives in Ukraine ) says that it is great and continue conversation. After all the information is gathered say thank you to the user for providing information and that the team will contact him/her in a while. Always be polite! Do not ask for information confirmation. ",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        576,
+        80
+      ],
+      "id": "1bb966a0-8fe8-4665-be18-b4261bdf0b19",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        576,
+        272
+      ],
+      "id": "df7ec9e4-3f38-44c4-b156-4329b8dc1ea5",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Telegram Trigger\").all()[0].json.message.chat.id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1072,
+        80
+      ],
+      "id": "e3f4e593-d35b-4555-8178-b93e995039b0",
+      "name": "Send a text message",
+      "webhookId": "6d53423e-0d99-4824-8c5d-d7c4414b42df"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        960,
+        496
+      ],
+      "id": "9de50707-1076-4d86-b16a-b83025c4ea9a",
+      "name": "Google Gemini Chat Model1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Use the conversation between user and LLM and extract appropriate information from it and fill in he information about the customer in Google Sheets.\n\nConversation: {{ $('Format history').item.json.conversation }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        1456,
+        288
+      ],
+      "id": "70a3288f-375f-4710-8658-a1f5eed5c967",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        496
+      ],
+      "id": "d53378ec-4596-435d-b337-ca53e73cfaf2",
+      "name": "Google Gemini Chat Model2"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1136,
+        560
+      ],
+      "id": "68f082af-431b-47f5-a270-951e58bfae98",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc",
+          "mode": "list",
+          "cachedResultName": "conversation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "id",
+              "lookupValue": "={{ $json.message.from.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        64,
+        80
+      ],
+      "id": "2035c641-79bb-492d-95f6-1d0e7a2b2102",
+      "name": "Get conversation history",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentMessage = $('Telegram Trigger').first().json.message.text;\n\nlet history = '';\nif (items.length > 0) {\n  history = items\n    .filter(item => item.json.message) \n    .map(item => {\n      const sender = item.json.sender && item.json.sender.toLowerCase() === 'user'\n        ? 'User'\n        : 'AI';\n      return `${sender}: ${item.json.message}`;\n    })\n    .join('\\n');\n}\n\nconst conversation = history\n  ? `${history}\\nUser: ${currentMessage}`\n  : `User: ${currentMessage}`;\n\nreturn [{ json: { conversation } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        80
+      ],
+      "id": "09cb957f-0047-48f7-b2b8-2c1e66b56dbd",
+      "name": "Format history"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc",
+          "mode": "list",
+          "cachedResultName": "conversation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $(\"Telegram Trigger\").all()[0].json.message.chat.id }}",
+            "sender": "AI",
+            "message": "={{ $('Basic LLM Chain').item.json.text }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sender",
+              "displayName": "sender",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1488,
+        80
+      ],
+      "id": "4a473211-2135-4e12-b2aa-6ad5e32afbc1",
+      "name": "Append AI message to the history"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc",
+          "mode": "list",
+          "cachedResultName": "conversation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FCqKbIdh18f-f8RoYGhbQXspyEzKmusrOGrFXAL7nZc/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $(\"Telegram Trigger\").all()[0].json.message.chat.id }}",
+            "message": "={{ $(\"Telegram Trigger\").all()[0].json.message.text }}",
+            "sender": "user"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sender",
+              "displayName": "sender",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1280,
+        80
+      ],
+      "id": "4510ceb2-a38c-436c-b176-e408649748dd",
+      "name": "Append user message to the history"
+    },
+    {
+      "parameters": {
+        "inputText": "={{ $('Format history').item.json.conversation }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "Potential customer",
+              "description": "Customer is classified as potential if provided information about anual income of the customer is higher or equal to 100000 and country of residence of user is Ukraine "
+            },
+            {
+              "category": "Else"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        304
+      ],
+      "id": "02706e73-f418-4861-ae97-cb943ea28ca7",
+      "name": "Classify potential customer"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1SpH_w3nPJeVRIirELHv0tT73y2nn4H6iKnI0CYOjF6c",
+          "mode": "list",
+          "cachedResultName": "potential customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SpH_w3nPJeVRIirELHv0tT73y2nn4H6iKnI0CYOjF6c/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SpH_w3nPJeVRIirELHv0tT73y2nn4H6iKnI0CYOjF6c/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{$fromAI(\"user_name\", \"Name of the user\")}}",
+            "Annual income": "={{$fromAI(\"annual_income\", \"an anuual income of the user\")}}",
+            "Phone number": "={{$fromAI(\"phone_number\", \"phone number of the user\")}}",
+            "Country": "={{$fromAI(\"country\", \"country of residence of the user\")}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Phone number",
+              "displayName": "Phone number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Annual income",
+              "displayName": "Annual income",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Country",
+              "displayName": "Country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        1648,
+        512
+      ],
+      "id": "fd8bff5b-777c-47d9-a49d-e89940182434",
+      "name": "Append infromation about customer to the list"
+    },
+    {
+      "parameters": {
+        "content": "## Get history\n",
+        "height": 288,
+        "width": 496,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "233683a4-c50a-4fa7-9d45-01db85c2836f",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Update history\n",
+        "height": 272,
+        "width": 496,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1216,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "3db2f55f-eed3-498d-a2a3-63869abb39c7",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n## Append information about potential customer",
+        "height": 448,
+        "width": 544,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1328,
+        272
+      ],
+      "typeVersion": 1,
+      "id": "335ed7fe-9edb-4720-b94b-b446d8f8317b",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get conversation history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Classify potential customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Append user message to the history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify potential customer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get conversation history": {
+      "main": [
+        [
+          {
+            "node": "Format history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format history": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append user message to the history": {
+      "main": [
+        [
+          {
+            "node": "Append AI message to the history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify potential customer": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append infromation about customer to the list": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1af0bae9-4105-4b32-b058-9ff8d053032d",
+  "meta": {
+    "instanceId": "1e2f781e8683765ff3a86cc526330af190d4a2bbb33a9ef48e04a667dc907abb"
+  },
+  "id": "zPWKFmDRfMvJS3V6",
+  "tags": []
+}
