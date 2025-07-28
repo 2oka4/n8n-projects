@@ -1,0 +1,858 @@
+{
+  "name": "My workflow 3",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://www.deeplearning.ai/the-batch/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        864
+      ],
+      "id": "5bdaae67-57cc-4089-96ed-633aeb070a59",
+      "name": "Web scrapping of main page"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $json[\"data\"] || $json; \n\nconst match = html.match(/\\/the-batch\\/issue-\\d+\\//);\nconst latest = match ? `https://www.deeplearning.ai${match[0]}` : null;\n\nreturn [{ latestArticle: latest }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        864
+      ],
+      "id": "a212f979-7e50-4bab-82d3-250e4a14cf45",
+      "name": "Looking for the latest article"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.latestArticle }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        864
+      ],
+      "id": "eae554a6-e880-4087-84b5-a3588020d24e",
+      "name": "Web scrapping of the latest article"
+    },
+    {
+      "parameters": {
+        "chunkingMode": "advanced",
+        "options": {
+          "summarizationMethodAndPrompts": {
+            "values": {
+              "summarizationMethod": "stuff",
+              "prompt": "=You obtain title {{ $json.title }}-content {{ $json.content }} pairs of each article. Write short summary for each of the article in Summary. Try to be short and informative. Each summary should be less than 70 words. Return just summaries without additional words like \"summary:\", etc. \n\nSummary:"
+            }
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainSummarization",
+      "typeVersion": 2.1,
+      "position": [
+        1328,
+        864
+      ],
+      "id": "9bdb6466-64e2-41ed-b3ec-63006f1c384b",
+      "name": "Summarization Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        1040
+      ],
+      "id": "eec9b6a7-ea4e-4a21-a016-ee55e816f357",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "content",
+              "cssSelector": "h1#news ~ *",
+              "returnArray": true
+            },
+            {
+              "key": "title",
+              "cssSelector": "h1#news ~ h1",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        912,
+        864
+      ],
+      "id": "a426b40f-9e8f-4951-a3b1-446e76757628",
+      "name": "content extractor"
+    },
+    {
+      "parameters": {
+        "jsCode": "const titles = ($input.first().json.title || []).map(t => t.trim());\nconst blocks = ($input.first().json.content || []).map(b => b.trim()).filter(b => b);\n\nlet sections = [];\nlet currentTitle = null;\nlet currentText = [];\n\n// Normalize helper for matching\nconst normalize = s => s.replace(/\\s+/g, ' ').trim();\n\nblocks.forEach(block => {\n  const normBlock = normalize(block);\n  const matchedTitle = titles.find(t => normalize(t) === normBlock);\n\n  if (matchedTitle) {\n    // Save the previous section if it exists\n    if (currentTitle) {\n      sections.push({\n        title: currentTitle,\n        content: currentText.join(\"\\n\\n\")\n      });\n    }\n    // Start a new section\n    currentTitle = matchedTitle;\n    currentText = [];\n  } else if (currentTitle) {\n    currentText.push(block);\n  }\n});\n\n// Push the last collected section\nif (currentTitle) {\n  sections.push({\n    title: currentTitle,\n    content: currentText.join(\"\\n\\n\")\n  });\n}\n\n// Return as separate objects for n8n (table-friendly)\nreturn sections.map(section => ({\n  json: {\n    title: section.title,\n    content: section.content\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        864
+      ],
+      "id": "beb8779b-195a-43da-9677-c51dab0256e3",
+      "name": "Creating records for each of subtopic in the article"
+    },
+    {
+      "parameters": {
+        "chatId": "{{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output}}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        400
+      ],
+      "id": "bd50ad9a-ac07-4bf6-9446-2e2db293752b",
+      "name": "Send a text message",
+      "webhookId": "144ddb8d-31c3-4760-b659-8213dfd13ca6"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an article editor. Articles can be obtained from Google Sheets. The instruction of what needs to be changed are provided by user: {{$json.message.text}}. Follow the intrsuctions and update articles in Google Sheets. If the user wants to delete some of the artices, delete them from Google Sheets. Every time you update the article, return the updated version and explain what you have changed in it. Be avare that first row in the Google sheets is used for header, so when user refers to the articles by their order numbers, the article in the second row is actually \"first article\" and so on.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        208,
+        400
+      ],
+      "id": "502c1397-0303-4a01-9bbb-ba0896ac0172",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        208,
+        592
+      ],
+      "id": "81acb6e1-6da2-42e6-9ec4-9c0f5f057f3d",
+      "name": "Google Gemini Chat Model1"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "chatIds": ""
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -512,
+        384
+      ],
+      "id": "7d020ff3-a3a5-4485-9281-b8c6b10f51d5",
+      "name": "Telegram Trigger",
+      "webhookId": "3b399284-151d-4084-a1af-604048be54b6"
+    },
+    {
+      "parameters": {
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit#gid=0"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        112,
+        864
+      ],
+      "id": "379cb4ee-7d8f-4fae-8f07-13b8840954b9",
+      "name": "Clear sheet"
+    },
+    {
+      "parameters": {
+        "inputText": "={{ $json.message.text }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "Agreement",
+              "description": "User agrees to publish (send) the articles and provides numbers(ids) of articles to be published (sent) to the channel. Key words are: post , channel"
+            },
+            {
+              "category": "Instruction",
+              "description": "Users wants some of the articles to be provided or tweaked with respect to instruction s provided. Also includes numbers(ids) of articles that should be tweaked"
+            },
+            {
+              "category": "New article",
+              "description": "When user's prompt is: \"+\""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        -304,
+        368
+      ],
+      "id": "096720eb-227d-458c-a4a4-84adb3b022d1",
+      "name": "Text Classifier"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "output"
+          ],
+          "schema": [
+            {
+              "id": "output",
+              "displayName": "output",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1648,
+        1008
+      ],
+      "id": "35f3b234-2e8c-46bc-a2f5-0731fe49f363",
+      "name": "Save articles"
+    },
+    {
+      "parameters": {
+        "chatId": "{{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1648,
+        816
+      ],
+      "id": "a174bd4c-1b58-43d9-a384-f0c85987fed6",
+      "name": "Send articles",
+      "webhookId": "ecc07b0d-847a-42d6-b86b-881a86289583"
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        496,
+        128
+      ],
+      "id": "ff0da9e2-7a60-495f-ae86-663f91d9b462",
+      "name": "Send articles to the channel",
+      "webhookId": "5cbcd1dc-4d29-47d8-a53b-c0d3adff260c"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  let content = item.json.output;\n\n  try {\n    // Try to parse as JSON if it's in a stringified object format\n    const parsed = JSON.parse(content);\n    content = parsed.text || content;\n  } catch (e) {\n    // If it's already plain text, leave it as-is\n  }\n\n  return {\n    json: {\n      row_number: item.json.row_number,\n      text: content.trim()\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        128
+      ],
+      "id": "3d541def-512e-420d-ac96-8affc12eba6e",
+      "name": "Prepare articles for posting"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=user_1",
+        "contextWindowLength": 15
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        336,
+        592
+      ],
+      "id": "cfe34400-4e43-486d-ab4e-e9884ec63ff2",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        576
+      ],
+      "id": "3e39ea15-bc6a-4c1a-9cda-c1e7aeb21e71",
+      "name": "Text classifier"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Delete articles from Google Sheets. Only articles which were asked to be deleted by user should be deleted.",
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit#gid=0"
+        },
+        "startIndex": "={{$fromAI(\"start_row_number\", \"first article row to be deleted\")}}",
+        "numberToDelete": "={{$fromAI(\"number_rows_to_delete\", \"rows of articles to be deleted\")}}"
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        480,
+        592
+      ],
+      "id": "835bfdac-1a09-4b3c-94fa-c6ec75c76793",
+      "name": "Delete articles from Google Sheets"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "These are articles that you need to modify accordingly to instrunctions",
+        "documentId": {
+          "__rl": true,
+          "value": "1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit#gid=0"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        624,
+        592
+      ],
+      "id": "43caa952-8402-4c5b-903b-9a0c537e1ad8",
+      "name": "Get articles from Google Sheets"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "If user wants to tweak the article (or multiple articles) in some way, you should change the article with it updated version in Google Sheets",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "output": "={{$fromAI(\"articles_to_update\", \"which article should be updated and in which way\")}}",
+            "row_number": "={{$fromAI(\"row_number_of_article_to_update\", \"the row number of the article that is updated\")}}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "output",
+              "displayName": "output",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        768,
+        592
+      ],
+      "id": "5b45e52f-aab8-4feb-952a-a7126aa7909a",
+      "name": "Update articles in Google Sheets"
+    },
+    {
+      "parameters": {
+        "content": "## Sending articles to the channel\n",
+        "height": 352,
+        "width": 896
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "f1b13271-0a23-420e-8e08-42e3e35452a8",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Modify articles (if needed)\n",
+        "height": 400,
+        "width": 784,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        144,
+        352
+      ],
+      "typeVersion": 1,
+      "id": "e94b3689-580a-4e76-96b5-c3acd2a112ae",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Get articles with Web Scrapping\n",
+        "height": 400,
+        "width": 1744,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        64,
+        784
+      ],
+      "typeVersion": 1,
+      "id": "73803c4f-4b98-48eb-a32c-f0d0522faca8",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit#gid=0"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        96,
+        128
+      ],
+      "id": "96f8d58a-63a4-4d56-aa49-d79056fad388",
+      "name": "Get articles to post"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1k1X5oYWBpO4__0qO5dergMweCAARupqRQ1aTtOY3ij4/edit#gid=0"
+        },
+        "numberToDelete": 20
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        704,
+        128
+      ],
+      "id": "79ba68c1-50bd-40e4-857a-8497c5a800e3",
+      "name": "Delete all articles from Google Sheets"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Web scrapping of main page": {
+      "main": [
+        [
+          {
+            "node": "Looking for the latest article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Looking for the latest article": {
+      "main": [
+        [
+          {
+            "node": "Web scrapping of the latest article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web scrapping of the latest article": {
+      "main": [
+        [
+          {
+            "node": "content extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Summarization Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarization Chain": {
+      "main": [
+        [
+          {
+            "node": "Save articles",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "content extractor": {
+      "main": [
+        [
+          {
+            "node": "Creating records for each of subtopic in the article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creating records for each of subtopic in the article": {
+      "main": [
+        [
+          {
+            "node": "Summarization Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Text Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear sheet": {
+      "main": [
+        [
+          {
+            "node": "Web scrapping of main page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Classifier": {
+      "main": [
+        [
+          {
+            "node": "Get articles to post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send articles to the channel": {
+      "main": [
+        [
+          {
+            "node": "Delete all articles from Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare articles for posting": {
+      "main": [
+        [
+          {
+            "node": "Send articles to the channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text classifier": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Text Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete articles from Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get articles from Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update articles in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get articles to post": {
+      "main": [
+        [
+          {
+            "node": "Prepare articles for posting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "meta": {
+    "instanceId": "1e2f781e8683765ff3a86cc526330af190d4a2bbb33a9ef48e04a667dc907abb"
+  },
+  "tags": []
+}
